@@ -2,13 +2,13 @@ from setuptools import setup, find_packages
 
 setup(
     name="topaisdk",
-    version="0.1.0",
+    version="0.1.1",
     author="error.ding",
     author_email="error.ding@uptech.ai",
     description="topai python sdk",
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",
-    url="http://svrgit.dingtone.xyz/topai",
+    url="http://github.com/topailab",
     packages=find_packages(),
     python_requires=">=3.11",
     install_requires=[],
