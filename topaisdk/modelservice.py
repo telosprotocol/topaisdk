@@ -1,13 +1,67 @@
 
 import inspect
 import logging
-from typing import Callable
+from typing import Callable, Dict
 from functools import wraps
+
+
+from ray.util import metrics
 
 DEFAULT_CONSECUTIVE_FAILURES_NUM = 5
 DEFAULT_LOGGER_NAME = "ray.serve"
 
 logger = logging.getLogger(DEFAULT_LOGGER_NAME)
+
+class ConsecutiveFailureTracker:
+    def __init__(self, method: str) -> None:
+        self._failure_count: int = 0
+        self._except_total_count: metrics.Counter = metrics.Counter(
+                "topai_model_service_except_count",
+                description=(
+                    "The total count of exceptions requested."
+                ),
+                tag_keys=("deployment", "application", "handle", "actor_id"),
+            )
+        self._except_total_count.set_default_tags({"method": method})
+        self._current_except_count_gauge: metrics.Gauge = metrics.Gauge(
+                "topai_model_service_current_except_count",
+                description=(
+                    "The count of current exceptions requested."
+                ),
+                tag_keys=("deployment", "application", "handle", "actor_id"),
+            )
+        self._current_except_count_gauge.set_default_tags({"method": method})
+        self._reset_health_count: metrics.Counter = metrics.Counter(
+                "topai_model_service_reset_health_count",
+                description=(
+                    "The count of reset health."
+                ),
+                tag_keys=("deployment", "application", "handle", "actor_id"),
+            )
+        self._reset_health_count.set_default_tags({"method": method})
+
+    def _inc_except_total_count(self) -> None:
+        self._except_total_count.inc()
+
+    def _inc_reset_health_count(self) -> None:
+        self._reset_health_count.inc()
+
+    def _set_current_except_count(self) -> None:
+        self._current_except_count_gauge.set(self._failure_count)
+
+    def inc_failure(self) -> None:
+        self._failure_count += 1
+        self._inc_except_total_count()
+        self._set_current_except_count()
+
+    def get_failure(self) -> int:
+        return self._failure_count
+
+    def reset_health(self) -> None:
+        if self._failure_count > 0:
+            self._inc_reset_health_count()
+        self._failure_count = 0
+        self._set_current_except_count()
 
 class ModelService:
     # Methods can only be decorat directly, and cannot be used to decorat @fastAPI.xx. This decorator will not be invoked
@@ -34,8 +88,6 @@ class ModelService:
                     finally:
                         if call_success:
                             self.reset_health(method)
-                        logger.debug('consecutive_failure consecutive_failure_map: {}'
-                                     .format(self._consecutive_failure_map))
                 wrapper_func = wrapper
             else:
                 @wraps(method)
@@ -53,8 +105,6 @@ class ModelService:
                     finally:
                         if call_success:
                             self.reset_health(method)
-                        logger.debug('consecutive_failure consecutive_failure_map: {}'
-                                     .format(self._consecutive_failure_map))
                 wrapper_func = wrapper
             return wrapper_func
         return decorator(_func) if callable(_func) else decorator
@@ -63,27 +113,31 @@ class ModelService:
         # Mainly used in ray system health check
         self._ray_check_health: bool = True
         self._failure_message: str = ''
-        self._consecutive_failure_map = dict()
+        self._consecutive_failure_map: Dict[str, ConsecutiveFailureTracker] = dict()
 
     def method_id(self, method) -> str:
         return "{}-{}".format(method.__name__, id(method))
 
+    def create_failure_tracker(self, method_id: str) -> None:
+        if method_id not in self._consecutive_failure_map:
+            self._consecutive_failure_map[method_id] = ConsecutiveFailureTracker(method_id)
+
     def reset_health(self, method) -> None:
         method_id = self.method_id(method)
-        self._consecutive_failure_map[method_id] = 0
+        self.create_failure_tracker(method_id)
+        self._consecutive_failure_map[method_id].reset_health()
 
     def update_health(self, method, msg: str) -> None:
         method_id = self.method_id(method)
-        if method_id not in self._consecutive_failure_map:
-            self._consecutive_failure_map[method_id] = 0
-        self._consecutive_failure_map[method_id] += 1
+        self.create_failure_tracker(method_id)
+        self._consecutive_failure_map[method_id].inc_failure()
         if hasattr(method, 'max_failures_num'):
             max_failures_num = method.max_failures_num
         else:
             max_failures_num = DEFAULT_CONSECUTIVE_FAILURES_NUM
             logger.warning('{} no max_failures_num attr, use DEFAULT_CONSECUTIVE_FAILURES_NUM({})'
                            .format(method, DEFAULT_CONSECUTIVE_FAILURES_NUM))
-        if self._consecutive_failure_map[method_id] >= max_failures_num:
+        if self._consecutive_failure_map[method_id].get_failure() >= max_failures_num:
             self.unhealth(msg)
 
     # ray system health check

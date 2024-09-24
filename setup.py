@@ -11,7 +11,7 @@ setup(
     url="http://github.com/topailab",
     packages=find_packages(),
     python_requires=">=3.11",
-    install_requires=[],
+    install_requires=["ray==2.34.0"],
     classifiers=[
         "Programming Language :: Python :: 3.11",
         "License :: OSI Approved :: MIT License",
