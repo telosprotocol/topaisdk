@@ -20,7 +20,7 @@ class ConsecutiveFailureTracker:
                 description=(
                     "The total count of exceptions requested."
                 ),
-                tag_keys=("deployment", "application", "handle", "actor_id", "method"),
+                tag_keys=("method"),
             )
         self._except_total_count.set_default_tags({"method": method})
         self._current_except_count_gauge: metrics.Gauge = metrics.Gauge(
@@ -28,7 +28,7 @@ class ConsecutiveFailureTracker:
                 description=(
                     "The count of current exceptions requested."
                 ),
-                tag_keys=("deployment", "application", "handle", "actor_id", "method"),
+                tag_keys=("method"),
             )
         self._current_except_count_gauge.set_default_tags({"method": method})
         self._reset_health_count: metrics.Counter = metrics.Counter(
@@ -36,7 +36,7 @@ class ConsecutiveFailureTracker:
                 description=(
                     "The count of reset health."
                 ),
-                tag_keys=("deployment", "application", "handle", "actor_id", "method"),
+                tag_keys=("method"),
             )
         self._reset_health_count.set_default_tags({"method": method})
 
