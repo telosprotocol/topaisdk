@@ -79,8 +79,8 @@ class LatencyMetricsCollector:
             except asyncio.CancelledError:
                 logger.info("Latency reporting loop cancelled")
                 break
-            except Exception as e:
-                logger.error(f"Error in latency reporting loop: {e}")
+            except Exception:
+                logger.exception("Error in latency reporting loop")
                 await asyncio.sleep(1)
                 
     async def report_metrics(self):
@@ -159,7 +159,7 @@ class LatencyMetricsCollector:
                 else:
                     logger.debug(f"Reported {len(metrics_list)} latency metrics to {self.metric_server_url}")
         except Exception as e:
-            logger.error(f"Error reporting latency metrics: {e}")
+            logger.exception(f"Error reporting latency metrics")
         logger.info(f"Reported {self.service_id} {len(metrics_list)} latency metrics to {self.metric_server_url} done, used {(time.time() - current_time) * 1000:.2f} ms")
             
     def add_latency_measurement(self, request_path: str, latency_ms: float, error: bool = False):
