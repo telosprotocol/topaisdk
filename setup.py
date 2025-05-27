@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="topaisdk",
-    version="0.1.2",
+    version="0.1.3",
     author="error.ding",
     author_email="error.ding@uptech.ai",
     description="topai python sdk",
